@@ -1,14 +1,15 @@
 
 import React from 'react';
 import { Job, JobType } from '../types';
-import { MapPin, ShieldCheck, ArrowRight, Tag, CheckCircle2 } from 'lucide-react';
+import { MapPin, ShieldCheck, ArrowRight, Tag, CheckCircle2, Loader2 } from 'lucide-react';
 
 interface JobCardProps {
   job: Job & { applied?: boolean; loading?: boolean };
   onApply: () => void;
+  application?: { status: 'pending' | 'accepted' | 'rejected'; resumeName?: string } | null;
 }
 
-const JobCard: React.FC<JobCardProps> = ({ job, onApply }) => {
+const JobCard: React.FC<JobCardProps> = ({ job, onApply, application }) => {
   const getTypeConfig = (type: JobType) => {
     switch (type) {
       case JobType.PEACE_JOB: return { color: 'text-emerald-600 bg-emerald-50 border-emerald-100', label: 'Peace Job' };
@@ -61,11 +62,12 @@ const JobCard: React.FC<JobCardProps> = ({ job, onApply }) => {
       <button 
         onClick={(e) => {
             e.stopPropagation();
-            if (!job.applied && !job.loading) onApply();
+            if (!job.loading) onApply();
         }}
-        disabled={job.applied || job.loading}
+        disabled={job.loading || !!(application && (application.status === 'pending' || application.status === 'accepted'))}
         className={`relative w-full overflow-hidden group/btn py-4 rounded-2xl font-black text-sm transition-all duration-300 active:scale-95 ${
-            job.applied ? 'bg-emerald-500 text-white cursor-default shadow-lg shadow-emerald-100' : 
+            (application && application.status === 'accepted') ? 'bg-emerald-500 text-white cursor-default shadow-lg shadow-emerald-100' : 
+            (application && application.status === 'pending') ? 'bg-amber-400 text-white cursor-wait' :
             job.loading ? 'bg-indigo-400 text-white cursor-wait' :
             'bg-slate-900 text-white hover:bg-indigo-600 hover:shadow-xl hover:shadow-indigo-200'
         }`}
@@ -73,10 +75,15 @@ const JobCard: React.FC<JobCardProps> = ({ job, onApply }) => {
         <div className="flex items-center justify-center gap-2 relative z-10 transition-transform">
           {job.loading ? (
             <div className="w-5 h-5 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
-          ) : job.applied ? (
+          ) : (application && application.status === 'accepted') ? (
             <>
               <CheckCircle2 className="w-4 h-4" />
-              Applied Successfully
+              Accepted
+            </>
+          ) : (application && application.status === 'pending') ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Pending
             </>
           ) : (
             <>
@@ -85,7 +92,7 @@ const JobCard: React.FC<JobCardProps> = ({ job, onApply }) => {
             </>
           )}
         </div>
-        {!job.applied && !job.loading && (
+        {!((application && (application.status === 'pending' || application.status === 'accepted')) || job.loading) && (
             <div className="absolute top-0 -left-[100%] w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent group-hover/btn:left-[100%] transition-all duration-700"></div>
         )}
       </button>

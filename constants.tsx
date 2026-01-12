@@ -118,6 +118,7 @@ export const getNavItems = (role: UserRole) => {
     return [
       ...common,
       { icon: <Search className="w-5 h-5" />, label: 'Find Jobs', path: 'jobs' },
+      { icon: <Briefcase className="w-5 h-5" />, label: 'Applications', path: 'applications' },
       { icon: <Calculator className="w-5 h-5" />, label: 'Budgeter', path: 'budget' },
       { icon: <Sparkles className="w-5 h-5" />, label: 'Learning', path: 'learning' },
       { icon: <Heart className="w-5 h-5" />, label: 'Community', path: 'community' },

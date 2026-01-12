@@ -39,6 +39,18 @@ export interface Message {
   reactions?: { emoji: string; count: number; youReacted?: boolean }[];
 }
 
+export interface Application {
+  id: string;
+  jobId: string;
+  jobTitle: string;
+  applicantName: string;
+  message?: string;
+  resumeName?: string;
+  resumeUrl?: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  createdAt: string;
+}
+
 export interface ChatSession {
   id: string;
   participantId: string;

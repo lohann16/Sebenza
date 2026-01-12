@@ -9,7 +9,7 @@ import Auth from './components/Auth';
 import { MOCK_JOBS as INITIAL_JOBS, MOCK_USER, BUDGET_CATEGORIES, MOCK_TALENT } from './constants';
 import { Search, Star, MessageSquare, ThumbsUp, TrendingUp, Zap, Target, Users, Heart, Calendar, Wallet, ArrowLeft, Plus, Briefcase, Handshake, CheckCircle2, CreditCard, Send, HeartOff, Sparkles, ShieldCheck, Lock, X, MoreVertical, Phone, Video, Paperclip, Smile, UserPlus, UserCheck, SearchX, Banknote, Landmark, ArrowRight, Loader2, AlertCircle, User as UserIcon, Hash, CreditCard as CardIcon, ArrowUpRight, ArrowDownLeft, Copy, Clock, CheckCircle, History } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { JobType, UserRole, HireOffer, SubscriptionTier, ChatSession, Review, UserProfile, AppNotification, Message, Transaction } from './types';
+import { JobType, UserRole, HireOffer, SubscriptionTier, ChatSession, Review, UserProfile, AppNotification, Message, Transaction, Application } from './types';
 
 type AppState = 'splash' | 'onboarding' | 'auth' | 'app';
 
@@ -62,7 +62,7 @@ const DepositModal = ({
       <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-[3rem] shadow-2xl relative z-10 overflow-hidden animate-in zoom-in-95 duration-300">
         <div className="p-8 border-b dark:border-slate-800 flex justify-between items-center bg-[#007749] text-white">
           <h2 className="text-2xl font-black">Add Funds (EFT)</h2>
-          <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-xl transition-all">
+          <button onClick={onClose} aria-label="Close" title="Close" className="p-2 hover:bg-white/20 rounded-xl transition-all">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -222,7 +222,7 @@ const WithdrawModal = ({
       <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-[3rem] shadow-2xl relative z-10 overflow-hidden animate-in zoom-in-95 duration-300">
         <div className="p-8 border-b dark:border-slate-800 flex justify-between items-center bg-[#E03C31] text-white">
           <h2 className="text-2xl font-black">Withdraw</h2>
-          <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-xl transition-all">
+          <button onClick={onClose} aria-label="Close" title="Close" className="p-2 hover:bg-white/20 rounded-xl transition-all">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -517,10 +517,10 @@ const ChatView = ({
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button className="p-3 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-2xl transition-all"><Phone className="w-5 h-5" /></button>
-                <button className="p-3 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-2xl transition-all"><Video className="w-5 h-5" /></button>
+                <button aria-label="Start audio call" title="Audio call" className="p-3 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-2xl transition-all"><Phone className="w-5 h-5" /></button>
+                <button aria-label="Start video call" title="Video call" className="p-3 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-2xl transition-all"><Video className="w-5 h-5" /></button>
                 <div className="w-px h-6 bg-slate-100 dark:bg-slate-800 mx-2" />
-                <button className="p-3 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-2xl transition-all"><MoreVertical className="w-5 h-5" /></button>
+                <button aria-label="More options" title="More" className="p-3 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-2xl transition-all"><MoreVertical className="w-5 h-5" /></button>
               </div>
             </div>
 
@@ -632,6 +632,77 @@ const App: React.FC = () => {
   const [user, setUser] = useState({ ...MOCK_USER, favorites: [] as string[], contacts: [] as string[] });
   const [talent, setTalent] = useState(MOCK_TALENT);
   const [chats, setChats] = useState<ChatSession[]>([]);
+
+  // Applications state (Quick Apply flow)
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [isApplyModalOpen, setApplyModalOpen] = useState(false);
+  const [applyJobId, setApplyJobId] = useState<string | null>(null);
+  const [applyName, setApplyName] = useState<string>(MOCK_USER.name);
+  const [applyMessage, setApplyMessage] = useState('');
+  const [applyFile, setApplyFile] = useState<File | null>(null);
+  const [applyFileUrl, setApplyFileUrl] = useState<string | null>(null);
+
+  const openApplyModal = (jobId: string) => {
+    const job = jobs.find(j => j.id === jobId);
+    if (!job) return;
+    setApplyJobId(jobId);
+    setApplyName(user.name);
+    setApplyMessage('');
+    setApplyFile(null);
+    setApplyFileUrl(null);
+    setApplyModalOpen(true);
+  };
+
+  const handleApplyFile = (f: File | null) => {
+    if (!f) return;
+    if (f.size > 5 * 1024 * 1024) {
+      addNotification('warning', 'File too large', `${f.name} exceeds 5MB limit.`);
+      return;
+    }
+    const url = URL.createObjectURL(f);
+    setApplyFile(f);
+    setApplyFileUrl(url);
+  };
+
+  const removeApplyFile = () => {
+    if (applyFileUrl) URL.revokeObjectURL(applyFileUrl);
+    setApplyFile(null);
+    setApplyFileUrl(null);
+  };
+
+  const submitApplication = () => {
+    if (!applyJobId) return;
+    if (!applyMessage.trim() && !applyFile) {
+      addNotification('warning', 'Incomplete', 'Please add a cover message or attach your CV.');
+      return;
+    }
+
+    const job = jobs.find(j => j.id === applyJobId);
+    if (!job) return;
+
+    const app: Application = {
+      id: Date.now().toString(),
+      jobId: applyJobId,
+      jobTitle: job.title,
+      applicantName: applyName,
+      message: applyMessage || undefined,
+      resumeName: applyFile?.name || undefined,
+      resumeUrl: applyFileUrl || undefined,
+      status: 'pending',
+      createdAt: new Date().toISOString()
+    };
+
+    setApplications(prev => [app, ...prev]);
+    setApplyModalOpen(false);
+    addNotification('success', 'Application sent', `Your application to ${job.title} is pending.`);
+  };
+
+  const withdrawApplication = (appId: string) => {
+    const app = applications.find(a => a.id === appId);
+    if (!app) return;
+    setApplications(prev => prev.filter(a => a.id !== appId));
+    addNotification('info', 'Application withdrawn', `Your application to ${app.jobTitle} was withdrawn.`);
+  };
   const [transactions, setTransactions] = useState<Transaction[]>([
     { id: 'tx1', type: 'payment_received', amount: 500, description: 'Gardening Job Reward', status: 'completed', date: '2023-10-24 10:30' },
     { id: 'tx2', type: 'withdrawal', amount: 200, description: 'Withdrawal to FNB', status: 'completed', date: '2023-10-23 14:15' }
@@ -903,7 +974,7 @@ const App: React.FC = () => {
                   <h3 className="text-xl font-black mb-1">Your Contacts</h3>
                   <p className="text-slate-400 font-medium text-sm">Collaborators and saved profiles.</p>
                 </div>
-                <button onClick={() => setActiveTab('contacts')} className="p-3 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 rounded-2xl hover:bg-indigo-600 hover:text-white transition-all">
+                <button onClick={() => setActiveTab('contacts')} aria-label="Open contacts" title="Open contacts" className="p-3 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 rounded-2xl hover:bg-indigo-600 hover:text-white transition-all">
                   <Plus className="w-5 h-5" />
                 </button>
               </div>
@@ -968,11 +1039,11 @@ const App: React.FC = () => {
                   <h3 className="text-xl font-black text-slate-900 dark:text-white truncate mb-1">{t.name}</h3>
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest truncate mb-4">{t.skills.slice(0, 2).join(' • ')}</p>
                   <div className="flex gap-2">
-                    <button onClick={() => startChat(t)} className="p-3 bg-slate-900 dark:bg-indigo-600 text-white rounded-xl hover:bg-indigo-600 transition-all active:scale-95">
+                    <button onClick={() => startChat(t)} aria-label={`Start chat with ${t.name}`} title={`Chat with ${t.name}`} className="p-3 bg-slate-900 dark:bg-indigo-600 text-white rounded-xl hover:bg-indigo-600 transition-all active:scale-95">
                       <MessageSquare className="w-4 h-4" />
                     </button>
                     <button 
-                      onClick={() => toggleContact(t.id)} 
+                      onClick={() => toggleContact(t.id)} aria-label={user.contacts.includes(t.id) ? 'Remove contact' : 'Add contact'} title={user.contacts.includes(t.id) ? 'Remove contact' : 'Add contact'}
                       className={`p-3 rounded-xl transition-all active:scale-95 ${user.contacts.includes(t.id) ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-indigo-600'}`}
                     >
                       {user.contacts.includes(t.id) ? <UserCheck className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
@@ -997,7 +1068,7 @@ const App: React.FC = () => {
                     {t.name[0]}
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => toggleFavorite(t.id)} className={`p-3 rounded-2xl transition-all ${user.favorites.includes(t.id) ? 'bg-pink-50 text-pink-500' : 'bg-slate-50 dark:bg-slate-800 text-slate-300 hover:text-pink-400'}`}>
+                    <button onClick={() => toggleFavorite(t.id)} aria-label={user.favorites.includes(t.id) ? 'Remove favorite' : 'Add favorite'} title={user.favorites.includes(t.id) ? 'Remove favorite' : 'Add favorite'} className={`p-3 rounded-2xl transition-all ${user.favorites.includes(t.id) ? 'bg-pink-50 text-pink-500' : 'bg-slate-50 dark:bg-slate-800 text-slate-300 hover:text-pink-400'}`}>
                       <Heart className={`w-5 h-5 ${user.favorites.includes(t.id) ? 'fill-pink-500' : ''}`} />
                     </button>
                     <div className="flex items-center gap-1.5 text-amber-500 bg-amber-50 dark:bg-amber-900/10 px-4 py-2 rounded-2xl text-[10px] font-black border border-amber-100 dark:border-amber-900/20">
@@ -1025,10 +1096,86 @@ const App: React.FC = () => {
         <div className="space-y-12">
           <h2 className="text-4xl font-black">Available Gigs</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {jobs.map(job => <JobCard key={job.id} job={job} onApply={() => {}} />)}
+            {jobs.map(job => <JobCard key={job.id} job={job} onApply={() => openApplyModal(job.id)} application={applications.find(a => a.jobId === job.id) ?? null} />)}
           </div>
         </div>
       );
+
+      case 'applications': return (
+        <div className="space-y-12">
+          <h2 className="text-4xl font-black">Your Applications</h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+              <h4 className="font-black mb-3">Pending</h4>
+              <div className="space-y-4">
+                {applications.filter(a => a.status === 'pending').length === 0 ? (
+                  <p className="text-sm text-slate-400">No pending applications.</p>
+                ) : (
+                  applications.filter(a => a.status === 'pending').map(a => {
+                    const job = jobs.find(j => j.id === a.jobId);
+                    return (
+                      <div key={a.id} className="p-4 bg-white dark:bg-slate-900 rounded-xl border dark:border-slate-800">
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="font-black">{a.jobTitle}</div>
+                          <div className="text-xs text-slate-400">{new Date(a.createdAt).toLocaleDateString()}</div>
+                        </div>
+                        <div className="text-sm text-slate-500 mb-2">{job?.employer}</div>
+                        {a.message && <p className="text-sm text-slate-600 mb-2">{a.message}</p>}
+                        {a.resumeUrl && <a href={a.resumeUrl} download className="text-indigo-600 text-sm">Download CV</a>}
+                        <div className="mt-3 flex gap-2 justify-end">
+                          <button onClick={() => withdrawApplication(a.id)} className="px-3 py-2 rounded-lg bg-slate-100">Withdraw</button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <div>
+              <h4 className="font-black mb-3">Accepted</h4>
+              <div className="space-y-4">
+                {applications.filter(a => a.status === 'accepted').length === 0 ? (
+                  <p className="text-sm text-slate-400">No accepted applications yet.</p>
+                ) : (
+                  applications.filter(a => a.status === 'accepted').map(a => (
+                    <div key={a.id} className="p-4 bg-white dark:bg-slate-900 rounded-xl border dark:border-slate-800">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="font-black">{a.jobTitle}</div>
+                        <div className="text-xs text-slate-400">{new Date(a.createdAt).toLocaleDateString()}</div>
+                      </div>
+                      <div className="text-sm text-slate-500 mb-2">{a.message}</div>
+                      {a.resumeUrl && <a href={a.resumeUrl} download className="text-indigo-600 text-sm">Download CV</a>}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div>
+              <h4 className="font-black mb-3">Rejected</h4>
+              <div className="space-y-4">
+                {applications.filter(a => a.status === 'rejected').length === 0 ? (
+                  <p className="text-sm text-slate-400">No rejected applications.</p>
+                ) : (
+                  applications.filter(a => a.status === 'rejected').map(a => (
+                    <div key={a.id} className="p-4 bg-white dark:bg-slate-900 rounded-xl border dark:border-slate-800">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="font-black">{a.jobTitle}</div>
+                        <div className="text-xs text-slate-400">{new Date(a.createdAt).toLocaleDateString()}</div>
+                      </div>
+                      <div className="text-sm text-slate-500 mb-2">{a.message}</div>
+                      {a.resumeUrl && <a href={a.resumeUrl} download className="text-indigo-600 text-sm">Download CV</a>}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+
       default: return <div className="p-20 text-center font-black text-slate-300 uppercase">Coming Soon</div>;
     }
   };
@@ -1064,7 +1211,7 @@ const App: React.FC = () => {
             <div className="p-10 border-b dark:border-slate-800">
               <div className="flex justify-between items-center mb-8">
                 <h2 className="text-3xl font-black tracking-tight">New Message</h2>
-                <button onClick={() => setNewChatModalOpen(false)} className="p-3 bg-slate-100 dark:bg-slate-800 rounded-2xl hover:bg-slate-200 transition-all"><X className="w-6 h-6" /></button>
+                <button onClick={() => setNewChatModalOpen(false)} aria-label="Close" title="Close" className="p-3 bg-slate-100 dark:bg-slate-800 rounded-2xl hover:bg-slate-200 transition-all"><X className="w-6 h-6" /></button>
               </div>
               <div className="flex bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border dark:border-slate-700 items-center gap-4">
                 <Search className="w-5 h-5 text-slate-400" />
@@ -1101,6 +1248,57 @@ const App: React.FC = () => {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Apply Modal */}
+      {isApplyModalOpen && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-md" onClick={() => setApplyModalOpen(false)} />
+          <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-[2rem] shadow-2xl relative z-10 flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="p-6 border-b dark:border-slate-800 flex justify-between items-center">
+              <h2 className="text-2xl font-black">Quick Apply</h2>
+              <button onClick={() => setApplyModalOpen(false)} aria-label="Close" title="Close" className="p-2 bg-slate-100 dark:bg-slate-800 rounded-2xl hover:bg-slate-200 transition-all"><X className="w-5 h-5" /></button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label htmlFor="apply-fullname" className="text-xs font-black text-slate-400 uppercase">Full name</label>
+                <input id="apply-fullname" value={applyName} onChange={(e) => setApplyName(e.target.value)} className="w-full mt-2 px-4 py-3 rounded-xl border bg-slate-50 dark:bg-slate-800 outline-none" />
+              </div>
+
+              <div>
+                <label htmlFor="apply-message" className="text-xs font-black text-slate-400 uppercase">Cover message</label>
+                <textarea id="apply-message" value={applyMessage} onChange={(e) => setApplyMessage(e.target.value)} rows={4} placeholder="Write a short note to the employer (optional if CV attached)" className="w-full mt-2 px-4 py-3 rounded-xl border bg-slate-50 dark:bg-slate-800 outline-none" />
+              </div>
+
+              <div>
+                <label className="text-xs font-black text-slate-400 uppercase">Attach CV / Document</label>
+                <div className="flex items-center gap-3 mt-2">
+                  <button onClick={() => document.getElementById('apply-file-input')?.click()} className="px-4 py-2 rounded-xl bg-slate-900 text-white">Upload CV</button>
+                  <div className="text-sm text-slate-500">or attach your file</div>
+                </div>
+                <input id="apply-file-input" type="file" accept=".pdf,.doc,.docx,.txt" className="hidden" onChange={(e) => handleApplyFile(e.target.files?.[0] ?? null)} aria-label="Upload CV" />
+
+                {applyFileUrl && (
+                  <div className="mt-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg flex items-center justify-between">
+                    <div className="truncate">{applyFile?.name}</div>
+                    <div className="flex items-center gap-2">
+                      <a href={applyFileUrl} download className="text-indigo-600 text-xs">Download</a>
+                      <button onClick={removeApplyFile} className="text-xs text-slate-500">Remove</button>
+                    </div>
+                  </div>
+                )}
+
+              </div>
+
+            </div>
+
+            <div className="p-6 border-t dark:border-slate-800 flex justify-end gap-3">
+              <button onClick={() => setApplyModalOpen(false)} className="px-4 py-2 rounded-xl bg-slate-100">Cancel</button>
+              <button onClick={submitApplication} className="px-4 py-2 rounded-xl bg-indigo-600 text-white">Submit application</button>
             </div>
           </div>
         </div>
