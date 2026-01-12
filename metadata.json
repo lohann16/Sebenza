@@ -1,0 +1,8 @@
+
+{
+  "name": "Sebenza - Every Skill Deserves a Chance",
+  "description": "A South African job-matching platform connecting youth to diverse opportunities, from peace jobs to professional roles, featuring AI-driven career guidance and community support.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
