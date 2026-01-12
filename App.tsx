@@ -766,6 +766,7 @@ const App: React.FC = () => {
   const [newCategory, setNewCategory] = useState<string>(BUDGET_CATEGORIES[0]);
   const [newType, setNewType] = useState<'expense' | 'saving'>('expense');
   const [newAmount, setNewAmount] = useState<string>('');
+  const [newScheduledAt, setNewScheduledAt] = useState<string | null>(null); // YYYY-MM-DD
 
   const BUDGET_STORAGE_KEY = 'sebenza_budget_items_v1';
 
@@ -791,16 +792,57 @@ const App: React.FC = () => {
       return;
     }
     const item: BudgetItem = { id: Date.now().toString(), category: newCategory, amount: Number(amt), type: newType };
+
+    // attach scheduling if provided
+    if (newScheduledAt) {
+      const scheduledDate = new Date(newScheduledAt + 'T00:00:00');
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      if (scheduledDate < today) {
+        addNotification('warning', 'Invalid date', 'Scheduled date cannot be in the past.');
+        return;
+      }
+      item.scheduledAt = newScheduledAt;
+      item.status = 'scheduled';
+      addNotification('success', 'Scheduled', `Payment scheduled on ${newScheduledAt}.`);
+    } else {
+      addNotification('success', 'Added', `Added ${item.category} ${item.type} of R ${item.amount.toLocaleString()}`);
+    }
+
     setBudgetItems(prev => [item, ...prev]);
     setNewAmount('');
     setNewCategory(BUDGET_CATEGORIES[0]);
     setNewType('expense');
-    addNotification('success', 'Added', `Added ${item.category} ${item.type} of R ${item.amount.toLocaleString()}`);
+    setNewScheduledAt(null);
   };
 
   const removeBudgetItem = (id: string) => {
     setBudgetItems(prev => prev.filter(i => i.id !== id));
     addNotification('info', 'Removed', 'Budget item removed.');
+  };
+
+  const markScheduledPaid = (id: string) => {
+    const item = budgetItems.find(i => i.id === id);
+    if (!item) return;
+    // create transaction for the scheduled payment
+    const tx: Transaction = {
+      id: Date.now().toString(),
+      type: 'payment_sent',
+      amount: item.amount,
+      description: `Scheduled ${item.category} ${item.type}`,
+      status: 'completed',
+      date: new Date().toISOString()
+    };
+    setTransactions(prev => [tx, ...prev]);
+    setBudgetItems(prev => prev.map(i => i.id === id ? { ...i, status: 'paid' } : i));
+    addNotification('success', 'Paid', `Scheduled payment of R ${item.amount.toLocaleString()} marked as paid.`);
+  };
+
+  const cancelScheduled = (id: string) => {
+    const item = budgetItems.find(i => i.id === id);
+    if (!item) return;
+    setBudgetItems(prev => prev.filter(i => i.id !== id));
+    addNotification('info', 'Cancelled', 'Scheduled payment cancelled.');
   };
 
   const [transactions, setTransactions] = useState<Transaction[]>([
@@ -1231,6 +1273,9 @@ const App: React.FC = () => {
                 <label htmlFor="budget-amount-input" className="text-xs font-black text-slate-400 uppercase">Amount (ZAR)</label>
                 <input id="budget-amount-input" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} placeholder="0.00" aria-label="Amount in ZAR" className="w-full px-4 py-3 rounded-xl border bg-slate-50 dark:bg-slate-800 outline-none" />
 
+                <label htmlFor="budget-schedule" className="text-xs font-black text-slate-400 uppercase">Schedule (optional)</label>
+                <input id="budget-schedule" type="date" value={newScheduledAt ?? ''} onChange={(e) => setNewScheduledAt(e.target.value || null)} aria-label="Schedule date" className="w-full px-4 py-3 rounded-xl border bg-slate-50 dark:bg-slate-800 outline-none" />
+
                 <div className="flex gap-2 justify-end">
                   <button onClick={() => { setNewAmount(''); setNewCategory(BUDGET_CATEGORIES[0]); setNewType('expense'); }} className="px-4 py-2 rounded-xl bg-slate-100">Clear</button>
                   <button onClick={addBudgetItem} className="px-4 py-2 rounded-xl bg-indigo-600 text-white">Add</button>
@@ -1248,15 +1293,48 @@ const App: React.FC = () => {
                     {budgetItems.map(item => (
                       <div key={item.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
                         <div>
-                          <div className="font-black">{item.category}</div>
+                          <div className="font-black">{item.category} {item.status === 'scheduled' && (<span className="text-xs ml-2 text-slate-400">(Scheduled {item.scheduledAt})</span>)}</div>
                           <div className="text-sm text-slate-400">{item.type === 'expense' ? 'Expense' : 'Saving'}</div>
                         </div>
                         <div className="flex items-center gap-4">
                           <div className={`font-black ${item.type === 'expense' ? 'text-rose-600' : 'text-emerald-600'}`}>R {item.amount.toLocaleString()}</div>
-                          <button onClick={() => removeBudgetItem(item.id)} className="px-3 py-2 rounded-lg bg-slate-100">Remove</button>
+                          {item.status === 'scheduled' ? (
+                            <div className="flex gap-2">
+                              <button onClick={(e) => { e.stopPropagation(); markScheduledPaid(item.id); }} className="px-3 py-2 rounded-lg bg-emerald-50 text-emerald-600">Mark as Paid</button>
+                              <button onClick={(e) => { e.stopPropagation(); cancelScheduled(item.id); }} className="px-3 py-2 rounded-lg bg-slate-100">Cancel</button>
+                            </div>
+                          ) : (
+                            <button onClick={(e) => { e.stopPropagation(); removeBudgetItem(item.id); }} className="px-3 py-2 rounded-lg bg-slate-100">Remove</button>
+                          )}
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-6 border dark:border-slate-800">
+                <h3 className="font-black mb-3">Scheduled Payments</h3>
+                {budgetItems.filter(i => i.status === 'scheduled').length === 0 ? (
+                  <p className="text-sm text-slate-400">No scheduled payments.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {budgetItems
+                      .filter(i => i.status === 'scheduled')
+                      .sort((a,b) => (a.scheduledAt ?? '').localeCompare(b.scheduledAt ?? ''))
+                      .map(item => (
+                        <div key={item.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
+                          <div>
+                            <div className="font-black">{item.category}</div>
+                            <div className="text-sm text-slate-400">Scheduled: {item.scheduledAt}</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className={`font-black ${item.type === 'expense' ? 'text-rose-600' : 'text-emerald-600'}`}>R {item.amount.toLocaleString()}</div>
+                            <button onClick={(e) => { e.stopPropagation(); markScheduledPaid(item.id); }} className="px-3 py-2 rounded-lg bg-emerald-50 text-emerald-600">Mark as Paid</button>
+                            <button onClick={(e) => { e.stopPropagation(); cancelScheduled(item.id); }} className="px-3 py-2 rounded-lg bg-slate-100">Cancel</button>
+                          </div>
+                        </div>
+                      ))}
                   </div>
                 )}
               </div>

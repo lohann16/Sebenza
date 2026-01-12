@@ -131,6 +131,9 @@ export interface BudgetItem {
   category: string;
   amount: number;
   type: 'expense' | 'saving';
+  // Optional scheduling fields
+  scheduledAt?: string; // ISO date string (YYYY-MM-DD)
+  status?: 'scheduled' | 'paid';
 }
 
 export interface HireOffer {
