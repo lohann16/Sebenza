@@ -9,7 +9,7 @@ import Auth from './components/Auth';
 import { MOCK_JOBS as INITIAL_JOBS, MOCK_USER, BUDGET_CATEGORIES, MOCK_TALENT } from './constants';
 import { Search, Star, MessageSquare, ThumbsUp, TrendingUp, Zap, Target, Users, Heart, Calendar, Wallet, ArrowLeft, Plus, Briefcase, Handshake, CheckCircle2, CreditCard, Send, HeartOff, Sparkles, ShieldCheck, Lock, X, MoreVertical, Phone, Video, Paperclip, Smile, UserPlus, UserCheck, SearchX, Banknote, Landmark, ArrowRight, Loader2, AlertCircle, User as UserIcon, Hash, CreditCard as CardIcon, ArrowUpRight, ArrowDownLeft, Copy, Clock, CheckCircle, History } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { Job, JobType, UserRole, HireOffer, SubscriptionTier, ChatSession, Review, UserProfile, AppNotification, Message, Transaction, Application } from './types';
+import { Job, JobType, UserRole, HireOffer, SubscriptionTier, ChatSession, Review, UserProfile, AppNotification, Message, Transaction, Application, BudgetItem } from './types';
 
 type AppState = 'splash' | 'onboarding' | 'auth' | 'app';
 
@@ -760,6 +760,49 @@ const App: React.FC = () => {
     setApplications(prev => prev.filter(a => a.id !== appId));
     addNotification('info', 'Application withdrawn', `Your application to ${app.jobTitle} was withdrawn.`);
   };
+
+  // --- Budgeter state & helpers ---
+  const [budgetItems, setBudgetItems] = useState<BudgetItem[]>([]);
+  const [newCategory, setNewCategory] = useState<string>(BUDGET_CATEGORIES[0]);
+  const [newType, setNewType] = useState<'expense' | 'saving'>('expense');
+  const [newAmount, setNewAmount] = useState<string>('');
+
+  const BUDGET_STORAGE_KEY = 'sebenza_budget_items_v1';
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(BUDGET_STORAGE_KEY);
+      if (saved) setBudgetItems(JSON.parse(saved));
+    } catch (e) {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(BUDGET_STORAGE_KEY, JSON.stringify(budgetItems));
+    } catch (e) { /* ignore */ }
+  }, [budgetItems]);
+
+  const addBudgetItem = () => {
+    const amt = parseFloat(newAmount.replace(/,/g, ''));
+    if (isNaN(amt) || amt <= 0) {
+      addNotification('warning', 'Invalid amount', 'Please enter a valid amount greater than 0.');
+      return;
+    }
+    const item: BudgetItem = { id: Date.now().toString(), category: newCategory, amount: Number(amt), type: newType };
+    setBudgetItems(prev => [item, ...prev]);
+    setNewAmount('');
+    setNewCategory(BUDGET_CATEGORIES[0]);
+    setNewType('expense');
+    addNotification('success', 'Added', `Added ${item.category} ${item.type} of R ${item.amount.toLocaleString()}`);
+  };
+
+  const removeBudgetItem = (id: string) => {
+    setBudgetItems(prev => prev.filter(i => i.id !== id));
+    addNotification('info', 'Removed', 'Budget item removed.');
+  };
+
   const [transactions, setTransactions] = useState<Transaction[]>([
     { id: 'tx1', type: 'payment_received', amount: 500, description: 'Gardening Job Reward', status: 'completed', date: '2023-10-24 10:30' },
     { id: 'tx2', type: 'withdrawal', amount: 200, description: 'Withdrawal to FNB', status: 'completed', date: '2023-10-23 14:15' }
@@ -1154,6 +1197,85 @@ const App: React.FC = () => {
           <h2 className="text-4xl font-black">Available Gigs</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {jobs.map(job => <JobCard key={job.id} job={job} onApply={() => openApplyModal(job.id)} onOpen={() => openJobModal(job.id)} application={applications.find(a => a.jobId === job.id) ?? null} />)}
+          </div>
+        </div>
+      );
+
+      case 'budget': return (
+        <div className="space-y-8">
+          <div className="flex items-center justify-between">
+            <h2 className="text-4xl font-black">Budgeter</h2>
+            <div className="flex items-center gap-4">
+              <div className="text-sm text-slate-400">Total Expenses</div>
+              <div className="font-black text-xl text-rose-600">R {budgetItems.filter(i => i.type === 'expense').reduce((s, i) => s + i.amount, 0).toLocaleString()}</div>
+              <div className="text-sm text-slate-400">Total Savings</div>
+              <div className="font-black text-xl text-emerald-600">R {budgetItems.filter(i => i.type === 'saving').reduce((s, i) => s + i.amount, 0).toLocaleString()}</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="md:col-span-1 bg-white dark:bg-slate-900 rounded-[2rem] p-6 border dark:border-slate-800">
+              <h3 className="font-black mb-3">Add item</h3>
+              <div className="space-y-3">
+                <label htmlFor="budget-category-select" className="text-xs font-black text-slate-400 uppercase">Category</label>
+                <select id="budget-category-select" value={newCategory} onChange={(e) => setNewCategory(e.target.value)} aria-label="Budget category" className="w-full px-4 py-3 rounded-xl border bg-slate-50 dark:bg-slate-800 outline-none">
+                  {BUDGET_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+
+                <label className="text-xs font-black text-slate-400 uppercase">Type</label>
+                <div className="flex gap-2">
+                  <button onClick={() => setNewType('expense')} className={`flex-1 py-2 rounded-xl ${newType === 'expense' ? 'bg-rose-50 text-rose-600' : 'bg-slate-100'}`}>Expense</button>
+                  <button onClick={() => setNewType('saving')} className={`flex-1 py-2 rounded-xl ${newType === 'saving' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100'}`}>Save</button>
+                </div>
+
+                <label htmlFor="budget-amount-input" className="text-xs font-black text-slate-400 uppercase">Amount (ZAR)</label>
+                <input id="budget-amount-input" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} placeholder="0.00" aria-label="Amount in ZAR" className="w-full px-4 py-3 rounded-xl border bg-slate-50 dark:bg-slate-800 outline-none" />
+
+                <div className="flex gap-2 justify-end">
+                  <button onClick={() => { setNewAmount(''); setNewCategory(BUDGET_CATEGORIES[0]); setNewType('expense'); }} className="px-4 py-2 rounded-xl bg-slate-100">Clear</button>
+                  <button onClick={addBudgetItem} className="px-4 py-2 rounded-xl bg-indigo-600 text-white">Add</button>
+                </div>
+              </div>
+            </div>
+
+            <div className="md:col-span-2 space-y-4">
+              <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-6 border dark:border-slate-800">
+                <h3 className="font-black mb-3">Overview</h3>
+                {budgetItems.length === 0 ? (
+                  <p className="text-sm text-slate-400">No budget items yet. Add your first transaction.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {budgetItems.map(item => (
+                      <div key={item.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
+                        <div>
+                          <div className="font-black">{item.category}</div>
+                          <div className="text-sm text-slate-400">{item.type === 'expense' ? 'Expense' : 'Saving'}</div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className={`font-black ${item.type === 'expense' ? 'text-rose-600' : 'text-emerald-600'}`}>R {item.amount.toLocaleString()}</div>
+                          <button onClick={() => removeBudgetItem(item.id)} className="px-3 py-2 rounded-lg bg-slate-100">Remove</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-6 border dark:border-slate-800">
+                <h3 className="font-black mb-3">By Category</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {BUDGET_CATEGORIES.map(c => {
+                    const total = budgetItems.filter(i => i.category === c).reduce((s, i) => s + i.amount * (i.type === 'expense' ? 1 : 1), 0);
+                    return (
+                      <div key={c} className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 flex items-center justify-between">
+                        <div className="text-sm text-slate-600">{c}</div>
+                        <div className="font-black">R {total.toLocaleString()}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       );
