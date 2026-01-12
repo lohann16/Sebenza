@@ -9,7 +9,7 @@ import Auth from './components/Auth';
 import { MOCK_JOBS as INITIAL_JOBS, MOCK_USER, BUDGET_CATEGORIES, MOCK_TALENT } from './constants';
 import { Search, Star, MessageSquare, ThumbsUp, TrendingUp, Zap, Target, Users, Heart, Calendar, Wallet, ArrowLeft, Plus, Briefcase, Handshake, CheckCircle2, CreditCard, Send, HeartOff, Sparkles, ShieldCheck, Lock, X, MoreVertical, Phone, Video, Paperclip, Smile, UserPlus, UserCheck, SearchX, Banknote, Landmark, ArrowRight, Loader2, AlertCircle, User as UserIcon, Hash, CreditCard as CardIcon, ArrowUpRight, ArrowDownLeft, Copy, Clock, CheckCircle, History } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { JobType, UserRole, HireOffer, SubscriptionTier, ChatSession, Review, UserProfile, AppNotification, Message, Transaction, Application } from './types';
+import { Job, JobType, UserRole, HireOffer, SubscriptionTier, ChatSession, Review, UserProfile, AppNotification, Message, Transaction, Application } from './types';
 
 type AppState = 'splash' | 'onboarding' | 'auth' | 'app';
 
@@ -653,6 +653,63 @@ const App: React.FC = () => {
     setApplyModalOpen(true);
   };
 
+  // Job detail modal state / helper
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [isJobModalOpen, setJobModalOpen] = useState(false);
+
+  const openJobModal = (jobId: string) => {
+    const job = jobs.find(j => j.id === jobId);
+    if (!job) return;
+    setSelectedJob(job);
+    setJobModalOpen(true);
+  };
+
+  const closeJobModal = () => {
+    setSelectedJob(null);
+    setJobModalOpen(false);
+  };
+
+  // Accessibility: focus management & focus trap for job modal
+  const jobModalCloseRef = useRef<HTMLButtonElement | null>(null);
+  const jobModalContainerRef = useRef<HTMLDivElement | null>(null);
+  const prevActiveElementRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (isJobModalOpen) {
+      prevActiveElementRef.current = document.activeElement as HTMLElement | null;
+      document.body.style.overflow = 'hidden';
+      // focus close button when the modal opens
+      setTimeout(() => jobModalCloseRef.current?.focus(), 0);
+    } else {
+      document.body.style.overflow = '';
+      // restore focus
+      prevActiveElementRef.current?.focus();
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [isJobModalOpen]);
+
+  const onJobModalKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      closeJobModal();
+    }
+    if (e.key === 'Tab') {
+      const container = jobModalContainerRef.current;
+      if (!container) return;
+      const focusable = Array.from(container.querySelectorAll('button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])')) as HTMLElement[];
+      const focusableEnabled = focusable.filter(el => !el.hasAttribute('disabled'));
+      if (!focusableEnabled.length) return;
+      const first = focusableEnabled[0];
+      const last = focusableEnabled[focusableEnabled.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  };
+
   const handleApplyFile = (f: File | null) => {
     if (!f) return;
     if (f.size > 5 * 1024 * 1024) {
@@ -662,7 +719,7 @@ const App: React.FC = () => {
     const url = URL.createObjectURL(f);
     setApplyFile(f);
     setApplyFileUrl(url);
-  };
+  }; 
 
   const removeApplyFile = () => {
     if (applyFileUrl) URL.revokeObjectURL(applyFileUrl);
@@ -1096,7 +1153,7 @@ const App: React.FC = () => {
         <div className="space-y-12">
           <h2 className="text-4xl font-black">Available Gigs</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {jobs.map(job => <JobCard key={job.id} job={job} onApply={() => openApplyModal(job.id)} application={applications.find(a => a.jobId === job.id) ?? null} />)}
+            {jobs.map(job => <JobCard key={job.id} job={job} onApply={() => openApplyModal(job.id)} onOpen={() => openJobModal(job.id)} application={applications.find(a => a.jobId === job.id) ?? null} />)}
           </div>
         </div>
       );
@@ -1299,6 +1356,54 @@ const App: React.FC = () => {
             <div className="p-6 border-t dark:border-slate-800 flex justify-end gap-3">
               <button onClick={() => setApplyModalOpen(false)} className="px-4 py-2 rounded-xl bg-slate-100">Cancel</button>
               <button onClick={submitApplication} className="px-4 py-2 rounded-xl bg-indigo-600 text-white">Submit application</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Job Details Modal */}
+      {isJobModalOpen && selectedJob && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4" role="presentation">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-md" onClick={closeJobModal} />
+          <div ref={jobModalContainerRef} onKeyDown={onJobModalKeyDown} role="dialog" aria-modal="true" aria-labelledby="job-modal-title" aria-describedby="job-modal-desc" tabIndex={-1} className="bg-white dark:bg-slate-900 w-full max-w-3xl rounded-[2rem] shadow-2xl relative z-10 flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="p-6 border-b dark:border-slate-800 flex justify-between items-center">
+              <div>
+                <h2 id="job-modal-title" className="text-2xl font-black">{selectedJob.title}</h2>
+                <p id="job-modal-desc" className="text-sm text-slate-500 font-bold">{selectedJob.employer} • {selectedJob.location}</p>
+              </div>
+              <button ref={jobModalCloseRef} onClick={closeJobModal} aria-label="Close" title="Close" className="p-2 bg-slate-100 dark:bg-slate-800 rounded-2xl hover:bg-slate-200 transition-all"><X className="w-5 h-5" /></button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <h3 className="font-black text-sm text-slate-400">Description</h3>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{selectedJob.description}</p>
+              </div>
+              <div>
+                <h3 className="font-black text-sm text-slate-400">Requirements</h3>
+                <ul className="mt-2 list-disc pl-6 text-sm text-slate-600 dark:text-slate-300">
+                  {selectedJob.requirements.map((r, i) => <li key={i}>{r}</li>)}
+                </ul>
+              </div>
+              <div className="flex gap-6 items-center">
+                <div>
+                  <h4 className="text-xs font-black text-slate-400 uppercase">Pay</h4>
+                  <div className="text-lg font-black">{selectedJob.salaryRange ?? 'Not specified'}</div>
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-slate-400 uppercase">Type</h4>
+                  <div className="text-lg font-black">{selectedJob.type}</div>
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-slate-400 uppercase">Skills</h4>
+                  <div className="text-sm text-slate-600">{selectedJob.skills.join(', ')}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t dark:border-slate-800 flex justify-end gap-3">
+              <button onClick={closeJobModal} className="px-4 py-2 rounded-xl bg-slate-100">Close</button>
+              <button onClick={() => { closeJobModal(); openApplyModal(selectedJob.id); }} className="px-4 py-2 rounded-xl bg-indigo-600 text-white">Quick Apply</button>
             </div>
           </div>
         </div>

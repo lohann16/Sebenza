@@ -1,15 +1,16 @@
 
 import React from 'react';
 import { Job, JobType } from '../types';
-import { MapPin, ShieldCheck, ArrowRight, Tag, CheckCircle2, Loader2 } from 'lucide-react';
+import { MapPin, ShieldCheck, ArrowRight, Tag, Eye, CheckCircle2, Loader2 } from 'lucide-react';
 
 interface JobCardProps {
   job: Job & { applied?: boolean; loading?: boolean };
   onApply: () => void;
+  onOpen?: () => void;
   application?: { status: 'pending' | 'accepted' | 'rejected'; resumeName?: string } | null;
 }
 
-const JobCard: React.FC<JobCardProps> = ({ job, onApply, application }) => {
+const JobCard: React.FC<JobCardProps> = ({ job, onApply, onOpen, application }) => {
   const getTypeConfig = (type: JobType) => {
     switch (type) {
       case JobType.PEACE_JOB: return { color: 'text-emerald-600 bg-emerald-50 border-emerald-100', label: 'Peace Job' };
@@ -27,17 +28,30 @@ const JobCard: React.FC<JobCardProps> = ({ job, onApply, application }) => {
         <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.1em] border ${config.color}`}>
           {config.label}
         </div>
-        {job.verified && (
-          <div className="flex items-center gap-1.5 text-indigo-600 bg-indigo-50/50 px-3 py-1.5 rounded-2xl text-[10px] font-black border border-indigo-100/50">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            VERIFIED
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {job.verified && (
+            <div className="flex items-center gap-1.5 text-indigo-600 bg-indigo-50/50 px-3 py-1.5 rounded-2xl text-[10px] font-black border border-indigo-100/50">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              VERIFIED
+            </div>
+          )}
+
+          <button
+            onClick={(e) => { e.stopPropagation(); onOpen?.(); }}
+            aria-label="View details"
+            title="View details"
+            className="p-2 rounded-xl text-slate-500 hover:text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <Eye className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       <div className="flex-1">
-        <h3 className="text-xl font-black text-slate-900 mb-2 leading-tight group-hover:text-indigo-600 transition-colors">
-          {job.title}
+        <h3 className="text-xl font-black text-slate-900 mb-2 leading-tight">
+          <button onClick={(e) => { e.stopPropagation(); onOpen?.(); }} aria-label={`View details for ${job.title}`} title={`View details for ${job.title}`} className="text-left w-full text-xl font-black text-slate-900 group-hover:text-indigo-600 transition-colors">
+            {job.title}
+          </button>
         </h3>
         <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mb-6">
           {job.employer}
