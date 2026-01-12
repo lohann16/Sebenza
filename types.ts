@@ -31,6 +31,12 @@ export interface Message {
   senderId: string;
   text: string;
   timestamp: string;
+  attachment?: {
+    name: string;
+    url: string;
+    type: string;
+  };
+  reactions?: { emoji: string; count: number; youReacted?: boolean }[];
 }
 
 export interface ChatSession {

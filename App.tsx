@@ -400,15 +400,21 @@ const ChatView = ({
   user, 
   sessions, 
   onSendMessage, 
-  onOpenNewChat 
+  onOpenNewChat,
+  onAttachFile,
+  onToggleReaction
 }: { 
   user: UserProfile, 
   sessions: ChatSession[], 
   onSendMessage: (sid: string, text: string) => void,
-  onOpenNewChat: () => void
+  onOpenNewChat: () => void,
+  onAttachFile: (sid: string, f: File | null) => void,
+  onToggleReaction: (sid: string, mid: string, emoji: string) => void
 }) => {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(sessions[0]?.id || null);
   const [input, setInput] = useState('');
+  const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const activeSession = sessions.find(s => s.id === activeSessionId);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -417,6 +423,22 @@ const ChatView = ({
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [activeSession?.messages]);
+
+  const openFilePicker = () => fileInputRef.current?.click();
+  const onDropFile = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragActive(false);
+    const f = e.dataTransfer.files?.[0];
+    if (activeSessionId) onAttachFile(activeSessionId, f);
+  };
+  const onDragOver = (e: React.DragEvent) => { e.preventDefault(); setDragActive(true); };
+  const onDragLeave = (e: React.DragEvent) => { e.preventDefault(); setDragActive(false); };
+
+  const emojiList = ['👍','🎉','👏','😀','💡','❤️'];
+
+  useEffect(() => {
+    setTimeout(() => setDragActive(false), 500);
+  }, [activeSessionId]);
 
   useEffect(() => {
     if (sessions.length > 0 && !activeSessionId) {
@@ -502,7 +524,7 @@ const ChatView = ({
               </div>
             </div>
 
-            <div ref={scrollRef} className="flex-1 overflow-y-auto p-10 space-y-8 custom-scrollbar">
+            <div ref={scrollRef} onDragOver={onDragOver} onDrop={onDropFile} onDragLeave={onDragLeave} className={`flex-1 overflow-y-auto p-10 space-y-8 custom-scrollbar ${dragActive ? 'ring-2 ring-indigo-300' : ''}`}>
               {activeSession.messages.map((m, idx) => {
                 const isMe = m.senderId === user.id;
                 return (
@@ -512,7 +534,35 @@ const ChatView = ({
                         <div className={`p-5 rounded-[2rem] text-sm font-medium shadow-sm ${
                           isMe ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-bl-none border dark:border-slate-700'
                         }`}>
+                          {m.attachment ? (
+                            m.attachment.type.startsWith('image/') ? (
+                              <img src={m.attachment.url} alt={m.attachment.name} className="max-w-full rounded-lg mb-2" />
+                            ) : (
+                              <div className="flex items-center gap-3 bg-slate-100 p-3 rounded-lg mb-2">
+                                <div className="w-10 h-10 bg-slate-200 rounded flex items-center justify-center text-slate-500 font-bold">📎</div>
+                                <div>
+                                  <div className="font-semibold text-sm text-slate-700 dark:text-slate-300">{m.attachment.name}</div>
+                                  <a href={m.attachment.url} download={m.attachment.name} className="text-indigo-600 text-xs">Download</a>
+                                </div>
+                              </div>
+                            )
+                          ) : null}
+
                           {m.text}
+
+                          <div className="mt-3 flex gap-2 items-center">
+                            {(m.reactions || []).map((r, ridx) => (
+                              <button key={ridx} aria-label={`React with ${r.emoji} on message`} onClick={() => onToggleReaction(activeSession.id, m.id, r.emoji)} className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs ${r.youReacted ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700'}`}>
+                                <span>{r.emoji}</span><span className="ml-1 font-semibold">{r.count}</span>
+                              </button>
+                            ))}
+
+                            <div className="flex items-center gap-1 ml-1">
+                              {emojiList.map((e, eidx) => (
+                                <button key={eidx} aria-label={`React with ${e}`} onClick={() => onToggleReaction(activeSession.id, m.id, e)} className="p-1 text-sm hover:bg-slate-200 rounded">{e}</button>
+                              ))}
+                            </div>
+                          </div>
                         </div>
                         <p className={`text-[10px] font-black uppercase text-slate-400 px-2 ${isMe ? 'text-right' : 'text-left'}`}>Just now</p>
                       </div>
@@ -520,12 +570,20 @@ const ChatView = ({
                   </div>
                 );
               })}
+
+              {dragActive && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="bg-white/80 dark:bg-slate-900/80 border-2 border-dashed border-indigo-300 rounded-lg p-6 text-indigo-600 font-semibold">Drop file to upload</div>
+                </div>
+              )}
+
             </div>
 
             <div className="p-8 bg-white dark:bg-slate-900 border-t dark:border-slate-800">
-              <div className="flex gap-4 items-center bg-slate-50 dark:bg-slate-800/50 p-3 rounded-[2rem] border dark:border-slate-700/50">
-                <button className="p-3 text-slate-400 hover:text-indigo-600 transition-colors"><Smile className="w-5 h-5" /></button>
-                <button className="p-3 text-slate-400 hover:text-indigo-600 transition-colors"><Paperclip className="w-5 h-5" /></button>
+              <div className="flex gap-4 items-center bg-slate-50 dark:bg-slate-800/50 p-3 rounded-[2rem] border dark:border-slate-700/50 items-center relative">
+                <button aria-label="Emoji" className="p-3 text-slate-400 hover:text-indigo-600 transition-colors"><Smile className="w-5 h-5" /></button>
+                <button aria-label="Attach file" onClick={() => openFilePicker()} className="p-3 text-slate-400 hover:text-indigo-600 transition-colors"><Paperclip className="w-5 h-5" /></button>
+                <input ref={fileInputRef} type="file" className="hidden" accept="image/*,.pdf,.doc,.docx,.txt" onChange={(e) => activeSessionId && onAttachFile(activeSessionId, e.target.files?.[0] ?? null)} aria-label="File input" />
                 <input 
                   autoFocus
                   value={input} 
@@ -537,10 +595,18 @@ const ChatView = ({
                 <button 
                   onClick={handleSend}
                   disabled={!input.trim()}
+                  aria-label="Send message"
                   className="bg-indigo-600 disabled:bg-slate-300 text-white p-4 rounded-2xl hover:bg-slate-900 transition-all shadow-xl active:scale-95"
                 >
                   <Send className="w-5 h-5" />
                 </button>
+
+                {dragActive && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="bg-white/80 dark:bg-slate-900/80 border-2 border-dashed border-indigo-300 rounded-lg p-6 text-indigo-600 font-semibold">Drop file to upload</div>
+                  </div>
+                )}
+
               </div>
             </div>
           </>
@@ -638,6 +704,17 @@ const App: React.FC = () => {
     setNewChatModalOpen(false);
   };
 
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+  const ACCEPTED_TYPES = ['image/', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/'];
+  const objectUrlsRef = React.useRef<string[]>([]);
+
+  useEffect(() => {
+    return () => {
+      // cleanup any object URLs created for attachments
+      objectUrlsRef.current.forEach(u => URL.revokeObjectURL(u));
+    };
+  }, []);
+
   const handleSendMessage = (sid: string, text: string) => {
     if (!text.trim()) return;
     setChats(prev => prev.map(c => c.id === sid ? {
@@ -645,6 +722,58 @@ const App: React.FC = () => {
       lastMessage: text,
       messages: [...c.messages, { id: Date.now().toString(), senderId: user.id, text, timestamp: new Date().toISOString() }]
     } : c));
+  };
+
+  const handleAttachFile = (sid: string, f: File | null) => {
+    if (!f) return;
+    if (f.size > MAX_FILE_SIZE) {
+      addNotification('warning', 'File too large', `File ${f.name} exceeds 5MB limit.`);
+      return;
+    }
+    const isValid = ACCEPTED_TYPES.some(t => f.type.startsWith(t) || f.type === t);
+    if (!isValid && !f.type.startsWith('image/')) {
+      addNotification('warning', 'Unsupported file', `File type not supported: ${f.type || 'unknown'}`);
+      return;
+    }
+
+    const url = URL.createObjectURL(f);
+    objectUrlsRef.current.push(url);
+
+    const attachmentMessage = {
+      id: Date.now().toString(),
+      senderId: user.id,
+      text: `Sent file: ${f.name}`,
+      timestamp: new Date().toISOString(),
+      attachment: { name: f.name, url, type: f.type },
+      reactions: []
+    };
+
+    setChats(prev => prev.map(c => c.id === sid ? {
+      ...c,
+      lastMessage: `Sent file: ${f.name}`,
+      messages: [...c.messages, attachmentMessage]
+    } : c));
+  };
+
+  const handleToggleReaction = (sid: string, mid: string, emoji: string) => {
+    setChats(prev => prev.map(c => {
+      if (c.id !== sid) return c;
+      return { ...c, messages: c.messages.map(m => {
+        if (m.id !== mid) return m;
+        const reactions = m.reactions || [];
+        const rIndex = reactions.findIndex(r => r.emoji === emoji);
+        if (rIndex === -1) {
+          return { ...m, reactions: [...reactions, { emoji, count: 1, youReacted: true }] };
+        }
+        const r = reactions[rIndex];
+        const youReacted = !r.youReacted;
+        const count = youReacted ? r.count + 1 : Math.max(0, r.count - 1);
+        let newReactions = [...reactions];
+        if (count === 0) newReactions.splice(rIndex, 1);
+        else newReactions[rIndex] = { ...r, count, youReacted };
+        return { ...m, reactions: newReactions };
+      }) };
+    }));
   };
 
   const handleWithdrawal = (amount: number, bank: string) => {
@@ -814,7 +943,7 @@ const App: React.FC = () => {
           </div>
         </div>
       );
-      case 'messages': return <ChatView user={user} sessions={chats} onSendMessage={handleSendMessage} onOpenNewChat={() => setNewChatModalOpen(true)} />;
+      case 'messages': return <ChatView user={user} sessions={chats} onSendMessage={handleSendMessage} onOpenNewChat={() => setNewChatModalOpen(true)} onAttachFile={handleAttachFile} onToggleReaction={handleToggleReaction} />;
       case 'contacts': return (
         <div className="space-y-12 animate-in fade-in duration-500">
           <div className="flex items-center justify-between">
