@@ -1,7 +1,6 @@
-
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Job, JobType } from '../types';
-import { MapPin, ShieldCheck, ArrowRight, Tag, Eye, CheckCircle2, Loader2 } from 'lucide-react';
+import { MapPin, ShieldCheck, ArrowRight, Tag, Eye, CheckCircle2, Loader2, XCircle } from 'lucide-react';
 
 interface JobCardProps {
   job: Job & { applied?: boolean; loading?: boolean };
@@ -10,20 +9,43 @@ interface JobCardProps {
   application?: { status: 'pending' | 'accepted' | 'rejected'; resumeName?: string } | null;
 }
 
+const TYPE_CONFIG: Record<JobType, { color: string; label: string }> = {
+  [JobType.PEACE_JOB]: { color: 'text-emerald-600 bg-emerald-50 border-emerald-100', label: 'Peace Job' },
+  [JobType.FREELANCE]: { color: 'text-blue-600 bg-blue-50 border-blue-100', label: 'Freelance' },
+  [JobType.FULL_TIME]: { color: 'text-indigo-600 bg-indigo-50 border-indigo-100', label: 'Full Time' },
+} as Record<JobType, { color: string; label: string }>;
+
+const DEFAULT_TYPE_CONFIG = { color: 'text-slate-600 bg-slate-50 border-slate-100', label: 'Part Time' };
+
+const getTypeConfig = (type: JobType) => TYPE_CONFIG[type] ?? DEFAULT_TYPE_CONFIG;
+
 const JobCard: React.FC<JobCardProps> = ({ job, onApply, onOpen, application }) => {
-  const getTypeConfig = (type: JobType) => {
-    switch (type) {
-      case JobType.PEACE_JOB: return { color: 'text-emerald-600 bg-emerald-50 border-emerald-100', label: 'Peace Job' };
-      case JobType.FREELANCE: return { color: 'text-blue-600 bg-blue-50 border-blue-100', label: 'Freelance' };
-      case JobType.FULL_TIME: return { color: 'text-indigo-600 bg-indigo-50 border-indigo-100', label: 'Full Time' };
-      default: return { color: 'text-slate-600 bg-slate-50 border-slate-100', label: 'Part Time' };
-    }
+  const config = useMemo(() => getTypeConfig(job.type), [job.type]);
+
+  const isLocked = job.loading || application?.status === 'pending' || application?.status === 'accepted';
+
+  const buttonAppearance =
+    application?.status === 'accepted'
+      ? 'bg-emerald-500 text-white cursor-default shadow-lg shadow-emerald-100'
+      : application?.status === 'rejected'
+      ? 'bg-rose-500 text-white cursor-default shadow-lg shadow-rose-100'
+      : application?.status === 'pending'
+      ? 'bg-amber-400 text-white cursor-wait'
+      : job.loading
+      ? 'bg-indigo-400 text-white cursor-wait'
+      : 'bg-slate-900 text-white hover:bg-indigo-600 hover:shadow-xl hover:shadow-indigo-200';
+
+  const handleOpen = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onOpen?.();
   };
 
-  const config = getTypeConfig(job.type);
-
   return (
-    <div className={`group bg-white rounded-[2.5rem] p-7 border transition-all duration-500 bento-card flex flex-col h-full ${job.applied ? 'border-indigo-100 opacity-90' : 'border-slate-100'}`}>
+    <div
+      className={`group bg-white rounded-[2.5rem] p-7 border transition-all duration-500 bento-card flex flex-col h-full ${
+        job.applied ? 'border-indigo-100 opacity-90' : 'border-slate-100'
+      }`}
+    >
       <div className="flex justify-between items-start mb-6">
         <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.1em] border ${config.color}`}>
           {config.label}
@@ -37,81 +59,83 @@ const JobCard: React.FC<JobCardProps> = ({ job, onApply, onOpen, application }) 
           )}
 
           <button
-            onClick={(e) => { e.stopPropagation(); onOpen?.(); }}
+            onClick={handleOpen}
             aria-label="View details"
-            title="View details"
             className="p-2 rounded-xl text-slate-500 hover:text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity"
           >
-            <Eye className="w-4 h-4" />
+            <Eye className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
       </div>
 
       <div className="flex-1">
-        <h3 className="text-xl font-black text-slate-900 mb-2 leading-tight">
-          <button onClick={(e) => { e.stopPropagation(); onOpen?.(); }} aria-label={`View details for ${job.title}`} title={`View details for ${job.title}`} className="text-left w-full text-xl font-black text-slate-900 group-hover:text-indigo-600 transition-colors">
+        <h3 className="mb-2 leading-tight">
+          <button
+            onClick={handleOpen}
+            aria-label={`View details for ${job.title}`}
+            className="text-left w-full text-xl font-black text-slate-900 group-hover:text-indigo-600 transition-colors"
+          >
             {job.title}
           </button>
         </h3>
-        <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mb-6">
-          {job.employer}
-        </p>
+        <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mb-6">{job.employer}</p>
 
         <div className="grid grid-cols-2 gap-4 mb-8">
           <div className="flex items-center gap-2.5 text-slate-500 text-sm font-medium">
             <div className="p-2 bg-slate-50 rounded-xl">
-              <MapPin className="w-4 h-4" />
+              <MapPin className="w-4 h-4" aria-hidden="true" />
             </div>
             <span className="truncate">{job.location.split(',')[0]}</span>
           </div>
           <div className="flex items-center gap-2.5 text-slate-500 text-sm font-medium">
             <div className="p-2 bg-slate-50 rounded-xl">
-              <Tag className="w-4 h-4" />
+              <Tag className="w-4 h-4" aria-hidden="true" />
             </div>
             <span className="truncate">{job.salaryRange?.split(' ')[0]}</span>
           </div>
         </div>
       </div>
 
-      <button 
+      <button
         onClick={(e) => {
-            e.stopPropagation();
-            if (!job.loading) onApply();
+          e.stopPropagation();
+          if (!isLocked) onApply();
         }}
-        disabled={job.loading || !!(application && (application.status === 'pending' || application.status === 'accepted'))}
-        className={`relative w-full overflow-hidden group/btn py-4 rounded-2xl font-black text-sm transition-all duration-300 active:scale-95 ${
-            (application && application.status === 'accepted') ? 'bg-emerald-500 text-white cursor-default shadow-lg shadow-emerald-100' : 
-            (application && application.status === 'pending') ? 'bg-amber-400 text-white cursor-wait' :
-            job.loading ? 'bg-indigo-400 text-white cursor-wait' :
-            'bg-slate-900 text-white hover:bg-indigo-600 hover:shadow-xl hover:shadow-indigo-200'
-        }`}
+        disabled={isLocked}
+        aria-busy={job.loading || application?.status === 'pending'}
+        className={`relative w-full overflow-hidden group/btn py-4 rounded-2xl font-black text-sm transition-all duration-300 active:scale-95 ${buttonAppearance}`}
       >
         <div className="flex items-center justify-center gap-2 relative z-10 transition-transform">
           {job.loading ? (
-            <div className="w-5 h-5 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
-          ) : (application && application.status === 'accepted') ? (
+            <div className="w-5 h-5 border-4 border-white/30 border-t-white rounded-full animate-spin" aria-hidden="true" />
+          ) : application?.status === 'accepted' ? (
             <>
-              <CheckCircle2 className="w-4 h-4" />
+              <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
               Accepted
             </>
-          ) : (application && application.status === 'pending') ? (
+          ) : application?.status === 'rejected' ? (
             <>
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <XCircle className="w-4 h-4" aria-hidden="true" />
+              Not Selected
+            </>
+          ) : application?.status === 'pending' ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
               Pending
             </>
           ) : (
             <>
               Quick Apply
-              <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
+              <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" aria-hidden="true" />
             </>
           )}
         </div>
-        {!((application && (application.status === 'pending' || application.status === 'accepted')) || job.loading) && (
-            <div className="absolute top-0 -left-[100%] w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent group-hover/btn:left-[100%] transition-all duration-700"></div>
+        {!isLocked && (
+          <div className="absolute top-0 -left-[100%] w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent group-hover/btn:left-[100%] transition-all duration-700" />
         )}
       </button>
     </div>
   );
 };
 
-export default JobCard;
+export default React.memo(JobCard);
